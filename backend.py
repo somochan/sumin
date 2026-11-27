@@ -77,34 +77,69 @@ def health() -> tuple:
     return jsonify({"status": "ok", "service": "NEXUS Research API"}), 200
 
 
+
 @app.get("/api/papers")
 def get_papers() -> tuple:
-    if not authenticated_user() and not is_local_demo_request():
-        return jsonify({"error": "Sign in is required to access research data."}), 401
+    user = authenticated_user()
+    is_demo = (
+        not user
+        and request.headers.get("X-NEXUS-DEMO") == "local"
+    )
+
+    if not user and not is_demo:
+        return jsonify({"error": "Sign in is required."}), 401
+
     domain = request.args.get("domain", "Generative AI")
     search = request.args.get("search", "").strip()
+
     try:
         limit = min(max(int(request.args.get("limit", 10)), 1), 25)
     except ValueError:
         return jsonify({"error": "limit must be a number"}), 400
 
     if domain not in ALLOWED_DOMAINS:
-        return jsonify({"error": f"domain must be one of: {', '.join(ALLOWED_DOMAINS)}"}), 400
+        return jsonify({"error": "Invalid research domain."}), 400
+
+    # Restrict public demo access
+    if is_demo:
+        if search:
+            return jsonify({
+                "error": "Custom searches require sign-in."
+            }), 403
+
+        if limit > 10:
+            return jsonify({
+                "error": "Demo access is limited to 10 papers."
+            }), 400
 
     query = search or ALLOWED_DOMAINS[domain]
+
     try:
         response = requests.get(
             OPENALEX_URL,
-            params={"search": query, "per-page": limit, "sort": "cited_by_count:desc"},
+            params={
+                "search": query,
+                "per-page": limit,
+                "sort": "cited_by_count:desc",
+            },
             timeout=15,
         )
         response.raise_for_status()
-    except requests.RequestException as exc:
-        return jsonify({"error": "Could not reach OpenAlex", "detail": str(exc)}), 502
+
+    except requests.RequestException:
+        return jsonify({
+            "error": "Could not reach OpenAlex."
+        }), 502
 
     works = response.json().get("results", [])
-    return jsonify({"domain": domain, "query": query, "papers": [format_work(work) for work in works]}), 200
 
+    return jsonify({
+        "domain": domain,
+        "query": query,
+        "papers": [format_work(work) for work in works]
+    }), 200
 
+  
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    import os
+    app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)), debug=False)  

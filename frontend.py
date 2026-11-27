@@ -10,7 +10,10 @@ import streamlit as st
 from streamlit.errors import StreamlitSecretNotFoundError
 from supabase import Client, create_client
 
-API_URL = os.getenv("NEXUS_API_URL", "http://127.0.0.1:5000")
+API_URL = os.getenv(
+    "NEXUS_API_URL",
+    "https://sumin1.vercel.app"
+).rstrip("/")
 THEMES = {
     "Nexus Dark": ("#050609", "#101722", "#eaf6ff", "#90a4b8", "#00f5ff", "#2563eb"),
     "Midnight Blue": ("#071426", "#0d243d", "#edf7ff", "#9bb6cc", "#38bdf8", "#3b82f6"),
